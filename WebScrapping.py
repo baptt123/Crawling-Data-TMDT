@@ -1,44 +1,66 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager  # Tự động tải chromedriver
+from selenium.webdriver.chrome.options import Options
+import mysql.connector
+import time
+import re
 
-# Cấu hình Service cho chromedriver
-service = Service(ChromeDriverManager().install())
-
-# Khởi tạo trình duyệt Chrome
-driver = webdriver.Chrome(service=service)
+# Cấu hình Chrome
+chrome_options = Options()
+chrome_options.add_argument("--headless")  # chạy nền
+driver = webdriver.Chrome(service=Service(), options=chrome_options)
 
 # Mở trang web
-url = 'https://anhhoabakery.vn/'  # URL của trang bạn muốn crawl
-driver.get(url)
+driver.get("https://nguyenson.vn/collections/banh-sinh-nhat")  # Thay bằng URL thật
+time.sleep(3)  # Đợi trang tải (nên dùng WebDriverWait nếu cần ổn định hơn)
 
-# Lấy tất cả các thẻ div có class 'grid__item'
-products = driver.find_elements(By.CLASS_NAME, 'grid__item')
+# Kết nối CSDL
+db = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="",
+    database="tmdt"
+)
+cursor = db.cursor()
 
-# Lặp qua từng sản phẩm và lấy thông tin
-for product in products:
+# Tìm tất cả sản phẩm
+product_blocks = driver.find_elements(By.CLASS_NAME, "product-block")
+
+for block in product_blocks:
     try:
-        # Lấy tên sản phẩm
-        title = product.find_element(By.CSS_SELECTOR, 'div.product-title a').text
+        # Tên sản phẩm
+        name = block.find_element(By.CSS_SELECTOR, ".pro-name a").text.strip()
 
-        # Lấy giá sản phẩm
-        price = product.find_element(By.CSS_SELECTOR, 'div.product-price').text
+        # Mô tả (không có -> gán mặc định)
+        description = "Sản phẩm ngon tuyệt!"  # hoặc có thể lấy từ trang chi tiết nếu cần
 
-        # Lấy liên kết sản phẩm
-        link = product.find_element(By.CSS_SELECTOR, 'div.product-img a').get_attribute('href')
+        # Giá sản phẩm
+        price_text = block.find_element(By.CSS_SELECTOR, ".pro-price span").text.strip()
+        price = float(re.sub(r"[^\d]", "", price_text))  # loại ₫ và dấu phẩy
 
-        # Lấy link ảnh sản phẩm
-        img_url = product.find_element(By.CSS_SELECTOR, 'div.product-img img').get_attribute('src')
+        # Ảnh sản phẩm
+        image_tag = block.find_element(By.CSS_SELECTOR, "img.img-loop")
+        image_url = image_tag.get_attribute("data-src")
+        if image_url.startswith("//"):
+            image_url = "https:" + image_url
 
-        # In kết quả
-        print(f'Tên sản phẩm: {title}')
-        print(f'Giá: {price}')
-        print(f'Link sản phẩm: {link}')
-        print(f'Link ảnh sản phẩm: {img_url}')
-        print('-' * 40)
+        # Các trường khác
+        stock = 10
+        category_id = 4
+
+        # Câu SQL
+        sql = """
+            INSERT INTO products (name, description, price, stock, image_url, category_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql, (name, description, price, stock, image_url, category_id))
+        db.commit()
+        print(f"Đã lưu: {name}")
     except Exception as e:
-        print(f'Lỗi khi lấy dữ liệu sản phẩm: {e}')
+        print("Lỗi khi xử lý sản phẩm:", e)
 
-# Đóng trình duyệt
+# Đóng
+cursor.close()
+db.close()
 driver.quit()
