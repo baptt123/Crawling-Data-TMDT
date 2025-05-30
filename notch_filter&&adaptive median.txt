@@ -1,0 +1,10 @@
+Notch filter
+1.f(x,y)->F(u,v)
+2.F(u,v)->Spectrum
+np.logP -> constrast stretching
+Save file->imwrite()
+3.Paint-> tìm tọa độ của các cặp điểm sáng bất thường
+4.H(u,v)
+
+Adaptive Median
+Tìm ksize
